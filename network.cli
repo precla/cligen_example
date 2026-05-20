@@ -17,6 +17,7 @@ config("Configure network settings") {
         no ip, remove_interface_ip();
         ipv6 <ipaddr:ipv6addr>("IPv6 address"), set_interface_ipv6();
         no ipv6, remove_interface_ipv6();
+        mtu <size:uint16 range[68:65535]>("MTU size"), set_mtu();
     }
 }
 

@@ -21,6 +21,7 @@ static const char *embedded_cli_spec =
 "        no ip, remove_interface_ip();\n"
 "        ipv6 <ipaddr:ipv6addr>(\"IPv6 address\"), set_interface_ipv6();\n"
 "        no ipv6, remove_interface_ipv6();\n"
+"        mtu <size:uint16 range[68:65535]>(\"MTU size\"), set_mtu();\n"
 "    }\n"
 "}\n"
 "\n"
