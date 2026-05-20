@@ -217,7 +217,57 @@ int set_interface_ip(cligen_handle h, cvec *cvv, cvec *argv)
     return 0;
 }
 
+int set_interface_ipv6(cligen_handle h, cvec *cvv, cvec *argv)
+{
+    cg_var *cv;
+    char *ifname;
+    struct in_addr *ipv6addr;
+
+    cv = cvec_find(cvv, "ifname");
+    if (!cv) {
+        cligen_output(stderr, "Error: interface name not found\n");
+        return -1;
+    }
+    ifname = cv_string_get(cv);
+
+    cv = cvec_find(cvv, "ipv6addr");
+    if (!cv) {
+        cligen_output(stderr, "Error: IP address not found\n");
+        return -1;
+    }
+    ipv6addr = cv_ipv4addr_get(cv);
+
+    cligen_output(stdout, "\nIP Configuration\n");
+    cligen_output(stdout, "  Interface: %s\n", ifname);
+    cligen_output(stdout, "  IPv6 Address: %s\n", inet_ntoa(*ipv6addr));
+    cligen_output(stdout, "  Status: Would be applied\n\n");
+    cligen_output(stdout, "  [Note: This is a simulation. In a real system,\n");
+    cligen_output(stdout, "   this would run: ip addr add %s/24 dev %s]\n\n", inet_ntoa(*ipv6addr), ifname);
+
+    return 0;
+}
+
 int remove_interface_ip(cligen_handle h, cvec *cvv, cvec *argv)
+{
+    cg_var *cv;
+    char *ifname;
+
+    cv = cvec_find(cvv, "ifname");
+    if (!cv) {
+        cligen_output(stderr, "Error: interface name not found\n");
+        return -1;
+    }
+    ifname = cv_string_get(cv);
+
+    cligen_output(stdout, "\n✓ IP Removed\n");
+    cligen_output(stdout, "  Interface: %s\n", ifname);
+    cligen_output(stdout, "  Status: IP address would be removed\n\n");
+    cligen_output(stdout, "  [Note: This would run: ip addr del <current-ip> dev %s]\n\n", ifname);
+
+    return 0;
+}
+
+int remove_interface_ipv6(cligen_handle h, cvec *cvv, cvec *argv)
 {
     cg_var *cv;
     char *ifname;
@@ -271,6 +321,10 @@ cgv_fnstype_t *str2fn(const char *name, void *arg, char **error)
         return set_interface_ip;
     if (strcmp(name, "remove_interface_ip") == 0)
         return remove_interface_ip;
+    if (strcmp(name, "set_interface_ipv6") == 0)
+        return set_interface_ip;
+    if (strcmp(name, "remove_interface_ipv6") == 0)
+        return remove_interface_ip;
     if (strcmp(name, "help_cmd") == 0)
         return help_cmd;
     if (strcmp(name, "quit_cmd") == 0)
@@ -294,10 +348,11 @@ static expand_cb *str2fn_expand(const char *name, void *arg, char **error)
 
 int main(void)
 {
-    cligen_handle h;
-    parse_tree *pt;
-    pt_head *ph;
-    cvec *globals;
+    int error = 0;    
+    cligen_handle cli_handle = {0};
+    parse_tree *tree = NULL;
+    pt_head *head = NULL;
+    cvec *globals = NULL;
 
     cligen_output(stdout, "\n");
     cligen_output(stdout, "╔════════════════════════════════════════════════════════════╗\n");
@@ -312,55 +367,55 @@ int main(void)
     cligen_output(stdout, "║  Type 'help' for available commands                        ║\n");
     cligen_output(stdout, "╚════════════════════════════════════════════════════════════╝\n\n");
 
-    /* Initialize CLIgen */
-    h = cligen_init();
-    if (!h) {
+    cli_handle = cligen_init();
+    if (!cli_handle) {
         cligen_output(stderr, "Failed to initialize CLIgen\n");
         return 1;
     }
 
-    /* Parse CLI specification from memory */
+    /* Parse CLI specification from string */
     globals = cvec_new(0);
-    if (clispec_parse_str(h, embedded_cli_spec, "qn-cli", NULL, NULL, globals) < 0) {
+    if (clispec_parse_str(cli_handle, embedded_cli_spec, "qn-cli", NULL, NULL, globals) < 0) {
         cligen_output(stderr, "Error: Failed to parse embedded CLI spec\n");
         cvec_free(globals);
-        cligen_exit(h);
-        return 1;
+        cligen_exit(cli_handle);
+        goto error_out;
     }
 
     /* Register callbacks and expands for all parse trees */
-    ph = NULL;
-    while ((ph = cligen_ph_each(h, ph)) != NULL) {
-        pt = cligen_ph_parsetree_get(ph);
+    head = NULL;
+    while ((head = cligen_ph_each(cli_handle, head)) != NULL) {
+        tree = cligen_ph_parsetree_get(head);
 
-        if (cligen_callbackv_str2fn(pt, str2fn, NULL) < 0) {
+        if (cligen_callbackv_str2fn(tree, str2fn, NULL) < 0) {
             cligen_output(stderr, "Error: Failed to register callbacks\n");
-            cvec_free(globals);
-            cligen_exit(h);
-            return 1;
+            goto error_out;
         }
 
-        if (cligen_expand_str2fn(pt, str2fn_expand, NULL) < 0) {
+        if (cligen_expand_str2fn(tree, str2fn_expand, NULL) < 0) {
             cligen_output(stderr, "Error: Failed to register expand functions\n");
-            cvec_free(globals);
-            cligen_exit(h);
-            return 1;
+            goto error_out;
         }
     }
 
     cvec_free(globals);
 
     /* Run the CLI */
-    if (cligen_loop(h) < 0) {
+    if (cligen_loop(cli_handle) < 0) {
         cligen_output(stderr, "Error in CLI loop\n");
-        cligen_exit(h);
-        return 1;
+        goto error_out;
     }
 
     cligen_output(stdout, "Goodbye!\n\n");
+   
+    goto out;
 
-    /* Cleanup */
-    cligen_exit(h);
+error_out:
+    error = -1;
 
-    return 0;
+out:
+    cvec_free(globals);
+    cligen_exit(cli_handle);
+
+    return error ? -1 : 0;
 }

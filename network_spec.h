@@ -19,6 +19,8 @@ static const char *embedded_cli_spec =
 "    interface <ifname:string interface()>(\"Interface name\") {\n"
 "        ip <ipaddr:ipv4addr>(\"IP address\"), set_interface_ip();\n"
 "        no ip, remove_interface_ip();\n"
+"        ipv6 <ipaddr:ipv6addr>(\"IPv6 address\"), set_interface_ipv6();\n"
+"        no ipv6, remove_interface_ipv6();\n"
 "    }\n"
 "}\n"
 "\n"
