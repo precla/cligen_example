@@ -1,12 +1,13 @@
 CC = gcc
-CFLAGS = -std=c99 -D_DEFAULT_SOURCE
+CFLAGS = -Wall -Wextra -Wno-unused-parameter -Wconversion -Wstrict-prototypes -Wuninitialized -Wshadow -Werror=cast-align -Werror=incompatible-pointer-types -pedantic -std=c99 -D_DEFAULT_SOURCE
 LDFLAGS = -lcligen
 
 # Default target
-all: scli scli_emb
+# all: scli scli_emb
+all: scli_emb
 
-scli: simple_cli_cligen.c
-	$(CC) $(CFLAGS) -o scli simple_cli_cligen.c $(LDFLAGS)
+# scli: simple_cli_cligen.c
+# 	$(CC) $(CFLAGS) -o scli simple_cli_cligen.c $(LDFLAGS)
 
 scli_emb: simple_cli_cligen_embedded.c
 	$(CC) $(CFLAGS) -o scli_emb simple_cli_cligen_embedded.c $(LDFLAGS)

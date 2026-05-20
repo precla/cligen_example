@@ -18,8 +18,8 @@
 
 typedef struct {
     char name[256];
-    char status[256];
-    char ip[INET_ADDRSTRLEN];
+    char status[64];
+    char ip[INET6_ADDRSTRLEN];
 } interface_info;
 
 /* Get list of interfaces dynamically from OS */
@@ -282,7 +282,7 @@ cgv_fnstype_t *str2fn(const char *name, void *arg, char **error)
     return NULL;
 }
 
-expand_cb *str2fn_expand(const char *name, void *arg, char **error)
+static expand_cb *str2fn_expand(const char *name, void *arg, char **error)
 {
     *error = NULL;
 
@@ -294,7 +294,7 @@ expand_cb *str2fn_expand(const char *name, void *arg, char **error)
 
 /* ===== MAIN PROGRAM ===== */
 
-int main()
+int main(void)
 {
     cligen_handle h;
     parse_tree *pt;
