@@ -44,3 +44,5 @@ endif()
 
 # target_link_libraries(simple_cli_cligen ${CLIGEN_LIBRARIES})
 target_link_libraries(simple_cli_cligen_embedded ${CLIGEN_LIBRARIES})
+
+target_compile_options(simple_cli_cligen_embedded PRIVATE -Wno-error=incompatible-pointer-types -Wno-error=cast-align)

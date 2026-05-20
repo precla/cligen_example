@@ -3,7 +3,6 @@ option(ENABLE_SANITIZER "Enable ASan+LSan+UBSan sanitizer (Debug build only)" OF
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # add_definitions(-D_XOPEN_SOURCE=600)
-include(CompileOptions.cmake)
 
 if(CMAKE_C_COMPILER_ID STREQUAL "Clang" OR CMAKE_C_COMPILER_ID STREQUAL "GNU")
 	set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -std=c99")
@@ -16,9 +15,7 @@ if(CMAKE_C_COMPILER_ID STREQUAL "Clang" OR CMAKE_C_COMPILER_ID STREQUAL "GNU")
 	set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wshadow")
 	set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wformat=2")
 	set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Werror=cast-align")
-	# if(CMAKE_C_COMPILER_ID STREQUAL "GNU" AND CMAKE_C_COMPILER_VERSION VERSION_GREATER_EQUAL "5")
-		set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wno=incompatible-pointer-types")
-	# endif()
+	set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wno-error=incompatible-pointer-types")
 	set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wno-unused-parameter")
 else()
 	message(FATAL_ERROR "unsupported compiler")

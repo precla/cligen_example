@@ -19,7 +19,8 @@
 typedef struct {
     char name[256];
     char status[64];
-    char ip[INET6_ADDRSTRLEN];
+    char ip[INET_ADDRSTRLEN];
+    char ip6[INET6_ADDRSTRLEN];
 } interface_info;
 
 /* Get list of interfaces dynamically from OS */
@@ -57,6 +58,7 @@ int get_interfaces(interface_info *interfaces, int max_count)
         }
 
         strcpy(interfaces[count].ip, "N/A");
+        strcpy(interfaces[count].ip6, "N/A");
         count++;
     }
 
@@ -77,7 +79,7 @@ int get_interfaces(interface_info *interfaces, int max_count)
             struct sockaddr_in6 *sin6 = (struct sockaddr_in6 *)ifa->ifa_addr;
             for (int i = 0; i < count; i++) {
                 if (strcmp(interfaces[i].name, ifa->ifa_name) == 0) {
-                    inet_ntop(AF_INET6, &sin6->sin6_addr, interfaces[i].ip, INET6_ADDRSTRLEN);
+                    inet_ntop(AF_INET6, &sin6->sin6_addr, interfaces[i].ip6, INET6_ADDRSTRLEN);
                     break;
                 }
             }
@@ -97,8 +99,8 @@ int expand_interface(cligen_handle h,
                      cvec         *commands,
                      cvec         *helptexts)
 {
-    static interface_info interfaces[100];
-    static int interface_count = 0;
+    interface_info interfaces[100];
+    int interface_count = 0;
 
     interface_count = get_interfaces(interfaces, 100);
     if (interface_count < 0) {
@@ -110,10 +112,11 @@ int expand_interface(cligen_handle h,
         cvec_add_string(commands, NULL, interfaces[i].name);
 
         char help[512];
-        snprintf(help, sizeof(help), "%s (%s) %s",
+        snprintf(help, sizeof(help), "%s (%s) '%s' '%s'",
                  interfaces[i].name,
                  interfaces[i].status,
-                 interfaces[i].ip);
+                 interfaces[i].ip,
+                 interfaces[i].ip6);
         cvec_add_string(helptexts, NULL, help);
     }
 
@@ -124,8 +127,8 @@ int expand_interface(cligen_handle h,
 
 int show_interfaces(cligen_handle h, cvec *cvv, cvec *argv)
 {
-    static interface_info interfaces[100];
-    static int interface_count = 0;
+    interface_info interfaces[100];
+    int interface_count = 0;
 
     interface_count = get_interfaces(interfaces, 100);
     if (interface_count < 0) {
@@ -134,18 +137,15 @@ int show_interfaces(cligen_handle h, cvec *cvv, cvec *argv)
     }
 
     cligen_output(stdout, "\n");
-    cligen_output(stdout, "╔════════════════════╦════════════╦═══════════════════════╗\n");
-    cligen_output(stdout, "║ Interface          ║ Status     ║ IP Address            ║\n");
-    cligen_output(stdout, "╠════════════════════╬════════════╬═══════════════════════╣\n");
+    cligen_output(stdout, "Interface            Status       IP Address\n");
 
     for (int i = 0; i < interface_count; i++) {
-        cligen_output(stdout, "║ %-18s ║ %-10s ║ %-21s ║\n",
+        cligen_output(stdout, "%-18s %-10s %-21s\n",
                    interfaces[i].name,
                    interfaces[i].status,
                    interfaces[i].ip);
     }
 
-    cligen_output(stdout, "╚════════════════════╩════════════╩═══════════════════════╝\n");
     cligen_output(stdout, "\n");
 
     return 0;
@@ -155,8 +155,8 @@ int show_interface(cligen_handle h, cvec *cvv, cvec *argv)
 {
     cg_var *cv;
     char *ifname;
-    static interface_info interfaces[100];
-    static int interface_count = 0;
+    interface_info interfaces[100];
+    int interface_count = 0;
 
     cv = cvec_find(cvv, "ifname");
     if (!cv) {
@@ -167,24 +167,22 @@ int show_interface(cligen_handle h, cvec *cvv, cvec *argv)
     ifname = cv_string_get(cv);
 
     interface_count = get_interfaces(interfaces, 100);
-    cligen_output(stdout, "get_interfaces executed\n");
+
     if (interface_count < 0) {
         cligen_output(stdout, "No interfaces available\n");
         return -1;
     }
     cligen_output(stdout, "\n");
-    cligen_output(stdout, "╔════════════════════════════════════╗\n");
-    cligen_output(stdout, "║ Interface: %-24s ║\n", ifname);
+    cligen_output(stdout, "Interface: %-24s\n", ifname);
 
     for (int i = 0; i < interface_count; i++) {
         if (strcmp(interfaces[i].name, ifname) == 0) {
-            cligen_output(stdout, "║ Status: %-27s ║\n", interfaces[i].status);
-            cligen_output(stdout, "║ IP Address: %-23s ║\n", interfaces[i].ip);
+            cligen_output(stdout, "Status: %-27s\n", interfaces[i].status);
+            cligen_output(stdout, "IP Address: %-23s\n", interfaces[i].ip);
+            cligen_output(stdout, "IPv6 Address: %-23s\n", interfaces[i].ip6);
             break;
         }
     }
-
-    cligen_output(stdout, "╚════════════════════════════════════╝\n\n");
 
     return 0;
 }
@@ -209,7 +207,7 @@ int set_interface_ip(cligen_handle h, cvec *cvv, cvec *argv)
     }
     ipaddr = cv_ipv4addr_get(cv);
 
-    cligen_output(stdout, "\n✓ IP Configuration\n");
+    cligen_output(stdout, "\nIP Configuration\n");
     cligen_output(stdout, "  Interface: %s\n", ifname);
     cligen_output(stdout, "  IP Address: %s\n", inet_ntoa(*ipaddr));
     cligen_output(stdout, "  Status: Would be applied\n\n");
@@ -287,7 +285,7 @@ static expand_cb *str2fn_expand(const char *name, void *arg, char **error)
     *error = NULL;
 
     if (strcmp(name, "interface") == 0)
-        return expand_interface;
+        return (expand_cb *)expand_interface;
 
     return NULL;
 }
@@ -299,9 +297,7 @@ int main(void)
     cligen_handle h;
     parse_tree *pt;
     pt_head *ph;
-    FILE *f;
     cvec *globals;
-    char *spec_copy;
 
     cligen_output(stdout, "\n");
     cligen_output(stdout, "╔════════════════════════════════════════════════════════════╗\n");
@@ -323,34 +319,14 @@ int main(void)
         return 1;
     }
 
-    /* Create a FILE stream from the embedded spec string */
-    spec_copy = strdup(embedded_cli_spec);
-    if (!spec_copy) {
-        cligen_output(stderr, "Memory allocation failed\n");
-        cligen_exit(h);
-        return 1;
-    }
-
-    f = fmemopen(spec_copy, strlen(spec_copy), "r");
-    if (!f) {
-        cligen_output(stderr, "Error: Failed to create memory stream from embedded spec\n");
-        free(spec_copy);
-        cligen_exit(h);
-        return 1;
-    }
-
     /* Parse CLI specification from memory */
     globals = cvec_new(0);
-    if (clispec_parse_file(h, f, "<embedded>", NULL, NULL, globals) < 0) {
+    if (clispec_parse_str(h, embedded_cli_spec, "qn-cli", NULL, NULL, globals) < 0) {
         cligen_output(stderr, "Error: Failed to parse embedded CLI spec\n");
-        fclose(f);
-        free(spec_copy);
         cvec_free(globals);
         cligen_exit(h);
         return 1;
     }
-    fclose(f);
-    free(spec_copy);
 
     /* Register callbacks and expands for all parse trees */
     ph = NULL;
