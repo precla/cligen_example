@@ -1,0 +1,357 @@
+╔════════════════════════════════════════════════════════════════════════════╗
+║                                                                            ║
+║                       CLI UPDATE - SUMMARY                                ║
+║                   Dynamic IP Configuration Added                          ║
+║                                                                            ║
+╚════════════════════════════════════════════════════════════════════════════╝
+
+
+WHAT WAS CHANGED
+════════════════════════════════════════════════════════════════════════════
+
+The CLI now supports IP address configuration with dynamic interface discovery.
+
+OLD COMMAND:
+  cli> ip
+  [Shows table of all interfaces]
+
+NEW COMMAND FORMAT:
+  cli> ip                               # Show available interfaces
+  cli> ip <interface> <ip_address>      # Configure IP on interface
+
+
+NEW FEATURES
+════════════════════════════════════════════════════════════════════════════
+
+1. DYNAMIC INTERFACE LISTING
+   ─────────────────────────
+   When user types 'ip', it shows:
+
+   [Loading interfaces from system...]
+   [Available interfaces to configure:]
+
+     lo                 (UP   )  Currently: 127.0.0.1
+     ens192             (UP   )  Currently: 172.16.222.109
+     docker0            (UP   )  Currently: 172.17.0.1
+
+   Usage: ip <interface> <ip_address>
+   Example: ip eth0 192.168.1.100
+
+
+2. IP CONFIGURATION WITH VALIDATION
+   ───────────────────────────────────
+   User types: ip ens192 192.168.1.100
+
+   Output:
+   ✓ IP Configuration
+     Interface: ens192
+     IP Address: 192.168.1.100
+     Status: Would be applied
+
+     [Note: This is a simulation. In a real system,
+      this would run: ip addr add 192.168.1.100/24 dev ens192]
+
+
+3. ERROR HANDLING
+   ────────────────
+
+   Invalid Interface:
+     cli> ip nonexistent 192.168.1.1
+     Error: Interface 'nonexistent' not found
+     Available interfaces: lo, ens192, docker0
+
+   Invalid IP Format:
+     cli> ip ens192 invalid.ip
+     Error: Invalid IPv4 address format: 'invalid.ip'
+     Expected format: XXX.XXX.XXX.XXX (e.g., 192.168.1.100)
+
+
+HOW IT WORKS
+════════════════════════════════════════════════════════════════════════════
+
+Step-by-Step Execution:
+
+1. User types: ip ens192 192.168.1.100
+                    ↓
+2. CLI calls: handle_ip_command(input)
+                    ↓
+3. Function:
+   • Calls get_interfaces() → Query OS for interfaces
+   • Parses arguments: interface="ens192", ip="192.168.1.100"
+   • Validates: Is 'ens192' a real interface? YES
+   • Validates: Is '192.168.1.100' valid IPv4? YES
+   • Displays: Success message with what would be applied
+                    ↓
+4. Returns to CLI prompt
+
+
+KEY IMPLEMENTATION DETAILS
+════════════════════════════════════════════════════════════════════════════
+
+NEW FUNCTIONS ADDED:
+
+1. handle_ip_command(const char *input)
+   - Parses 'ip <interface> <ip_address>'
+   - Loads interfaces dynamically
+   - Validates input
+   - Shows appropriate messages
+
+   Location: simple_cli.c, line ~139
+
+2. is_valid_ipv4(const char *ip)
+   - Validates IPv4 address format
+   - Uses standard inet_aton()
+   - Returns 1 (valid) or 0 (invalid)
+
+   Location: simple_cli.c, line ~180
+
+3. interface_exists(const char *ifname, ...)
+   - Checks if interface exists in discovered list
+   - Returns 1 (exists) or 0 (not found)
+
+   Location: simple_cli.c, line ~190
+
+MODIFIED FUNCTIONS:
+
+1. main()
+   - Changed from strcmp() to strncmp() for "ip" matching
+   - Now handles: "ip", "ip eth0", "ip eth0 192.168.1.1"
+   - Calls handle_ip_command() for all variants
+
+2. show_help()
+   - Updated to show new command format
+   - Includes examples
+
+
+USAGE EXAMPLES
+════════════════════════════════════════════════════════════════════════════
+
+EXAMPLE 1: Show available interfaces
+──────────────────────────────────
+  $ ./simple_cli
+  cli> ip
+
+  Output: Lists all interfaces with status and current IPs
+
+
+EXAMPLE 2: Set IP on interface
+─────────────────────────────
+  $ ./simple_cli
+  cli> ip ens192 192.168.1.100
+
+  Output: Shows success message with what would be applied
+
+
+EXAMPLE 3: Error - wrong interface
+──────────────────────────────────
+  $ ./simple_cli
+  cli> ip badintf 192.168.1.100
+
+  Output: Shows error and lists available interfaces
+
+
+EXAMPLE 4: Error - bad IP format
+────────────────────────────────
+  $ ./simple_cli
+  cli> ip ens192 999.999.999.999
+
+  Output: Shows error about invalid IP format
+
+
+EXAMPLE 5: Multiple commands
+───────────────────────────
+  $ ./simple_cli
+  cli> help
+  cli> ip
+  cli> ip lo 127.0.0.2
+  cli> ip ens192 192.168.1.50
+  cli> exit
+
+
+TESTING
+════════════════════════════════════════════════════════════════════════════
+
+RUN AUTOMATED TESTS:
+
+  cd /home/sartura/aprcela/cligen_example
+  ./TEST_DEMO.sh
+
+This runs 6 comprehensive tests showing:
+  ✓ Help command
+  ✓ Show interfaces
+  ✓ Valid IP configuration
+  ✓ Invalid interface error
+  ✓ Invalid IP format error
+  ✓ Multiple commands in sequence
+
+
+TEST INDIVIDUAL COMMANDS:
+
+  # Show interfaces
+  echo "ip" | ./simple_cli
+
+  # Configure valid interface
+  echo "ip ens192 192.168.1.100" | ./simple_cli
+
+  # Test invalid interface
+  echo "ip badintf 192.168.1.1" | ./simple_cli
+
+  # Test invalid IP
+  echo "ip ens192 badip" | ./simple_cli
+
+
+COMPILE & RUN
+════════════════════════════════════════════════════════════════════════════
+
+1. Compile:
+   gcc -Wall -g -std=c99 -D_DEFAULT_SOURCE -o simple_cli simple_cli.c
+
+   Or use Makefile:
+   make
+
+2. Run:
+   ./simple_cli
+
+3. At prompt, type:
+   ip               # Show interfaces
+   ip ens192 192.168.1.100  # Set IP
+   help             # Show help
+   exit             # Exit
+
+
+WHY THIS MATTERS FOR CLIGEN
+════════════════════════════════════════════════════════════════════════════
+
+This example now demonstrates:
+
+✓ DYNAMIC DATA LOADING
+  - Interfaces queried from OS at runtime
+  - Not hardcoded in the program
+  - Works on any system
+
+✓ ARGUMENT PARSING
+  - Parses multiple arguments: ip <interface> <ip>
+  - Beyond simple single-word commands
+  - Shows how CLIgen handles complex syntax
+
+✓ INPUT VALIDATION
+  - Validates interface exists
+  - Validates IP address format
+  - Provides helpful error messages
+  - Shows available options on error
+
+✓ SIMULATION OF REAL COMMAND
+  - Shows what would happen in real system
+  - Demonstrates the workflow
+  - No actual configuration (safe to test)
+
+WHAT CLIGEN ADDS AUTOMATICALLY:
+
+Without CLIgen (this program):
+  - Manual argument parsing with sscanf()
+  - Manual validation code
+  - Manual error messages
+  - Need to update code for new options
+
+With CLIgen:
+  - Automatic parsing (lexer + parser)
+  - Type validation (ipv4addr type)
+  - Auto-generated error messages
+  - Automatic tab-completion
+  - Hierarchical menus possible
+  - Less code, more features
+
+
+FILES MODIFIED
+════════════════════════════════════════════════════════════════════════════
+
+✓ simple_cli.c
+  - Added handle_ip_command() function
+  - Added is_valid_ipv4() function
+  - Added interface_exists() function
+  - Modified main() for new command format
+  - Updated show_help()
+  - Total: ~310 lines (was ~230)
+
+
+NEW DOCUMENTATION FILES
+════════════════════════════════════════════════════════════════════════════
+
+✓ UPDATED_FEATURES.md
+  - Comprehensive feature documentation
+  - Examples of all functionality
+  - Error handling explanation
+  - Implementation details
+  - Code changes summary
+
+✓ TEST_DEMO.sh
+  - Automated test script
+  - Demonstrates all 6 test scenarios
+  - Shows output for each test
+  - Makes executable with: chmod +x TEST_DEMO.sh
+
+
+QUICK REFERENCE
+════════════════════════════════════════════════════════════════════════════
+
+Commands:
+  ip                         Show available interfaces
+  ip <interface> <ip>        Set IP on interface
+  help                       Show available commands
+  clear                      Clear screen
+  exit                       Exit CLI
+
+Valid Examples:
+  ip lo 127.0.0.2
+  ip ens192 192.168.1.100
+  ip docker0 172.17.0.50
+  ip eth0 10.0.0.1
+
+Invalid Examples (show errors):
+  ip badname 192.168.1.1          # Interface doesn't exist
+  ip ens192 999.999.999.999        # Invalid IP format
+  ip ens192 not_an_ip              # Invalid IP format
+
+
+VERIFICATION CHECKLIST
+════════════════════════════════════════════════════════════════════════════
+
+✓ Program compiles without errors
+✓ Program runs in endless loop
+✓ Waits for input at "cli>" prompt
+✓ 'ip' command shows available interfaces
+✓ 'ip <interface> <ip>' configures interface
+✓ Invalid interface shows error with options
+✓ Invalid IP shows format error with example
+✓ Missing arguments shows usage example
+✓ All other commands still work (help, clear, exit)
+✓ Tab character doesn't break anything
+✓ Dynamic interface discovery works
+✓ IP validation works with inet_aton()
+
+
+SUMMARY
+════════════════════════════════════════════════════════════════════════════
+
+The CLI has been updated to support dynamic IP address configuration:
+
+OLD BEHAVIOR:
+  - Only showed interfaces in a table
+  - No input arguments
+
+NEW BEHAVIOR:
+  - Shows interfaces dynamically
+  - Accepts ip <interface> <ip_address> format
+  - Validates both interface and IP
+  - Shows success or helpful error messages
+  - Simulates IP configuration
+
+This demonstrates the core concepts that make CLIgen powerful:
+  1. Dynamic data loading from OS
+  2. Argument parsing and validation
+  3. User-friendly error handling
+  4. Command processing
+
+Ready to use? Type: ./simple_cli
+
+════════════════════════════════════════════════════════════════════════════

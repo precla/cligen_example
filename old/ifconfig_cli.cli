@@ -1,0 +1,13 @@
+# Simple interface configuration CLI
+prompt = "ifconfig> ";
+comment = "#";
+
+show("Display interface info"){
+  interface <ifname:string interface()>("Interface name"), show_interface();
+}
+
+set("Configure interface"){
+  interface <ifname:string interface()>("Interface name") {
+    mtu <size:int32 range:68-65535>("MTU size"), set_mtu();
+  }
+}

@@ -1,0 +1,312 @@
+╔════════════════════════════════════════════════════════════════════════════╗
+║                                                                            ║
+║                    CLIGEN EXAMPLE - START HERE                            ║
+║                                                                            ║
+║              Dynamic Interface Loading Demo for CLIgen                     ║
+║                                                                            ║
+╚════════════════════════════════════════════════════════════════════════════╝
+
+
+THE GOAL
+════════
+
+Create a CLI that:
+  ✓ Runs in an endless loop
+  ✓ Waits for user input
+  ✓ When user enters "ip", dynamically loads and shows network interfaces
+  ✓ Shows real data (not hardcoded)
+
+
+QUICK START (2 minutes)
+════════════════════════════════════════════════════════════════════════════
+
+1. COMPILE
+──────────
+    cd /home/sartura/aprcela/cligen_example
+    gcc -Wall -g -std=c99 -D_DEFAULT_SOURCE -o simple_cli simple_cli.c
+
+    [or just: make]
+
+
+2. RUN
+──────
+    ./simple_cli
+
+
+3. TRY IT
+──────────
+    cli> ip
+
+    You see:
+    ┌──────────────┬────────┬────────────────┐
+    │ Interface    │ Status │ IP Address     │
+    ├──────────────┼────────┼────────────────┤
+    │ lo           │ UP     │ 127.0.0.1      │
+    │ ens192       │ UP     │ 172.16.222.109 │
+    │ docker0      │ UP     │ 172.17.0.1     │
+    └──────────────┴────────┴────────────────┘
+
+    cli> exit
+
+
+WHAT YOU'VE DONE
+════════════════
+
+You just saw DYNAMIC INTERFACE LOADING - the core power of CLIgen!
+
+  ✓ User entered: ip
+  ✓ Program called: getifaddrs() (OS system call)
+  ✓ OS returned: Your actual interfaces
+  ✓ Program displayed: Formatted table
+  ✓ Data was: FRESH FROM THE OS, not hardcoded
+
+This is why CLIgen is powerful - it automates this pattern!
+
+
+HOW IT WORKS
+════════════
+
+Step-by-step:
+
+    User types "ip"
+           ↓
+    CLI calls get_interfaces()
+           ↓
+    getifaddrs() queries OS: "What interfaces exist?"
+           ↓
+    OS returns: lo, ens192, docker0
+           ↓
+    Program displays in nice table
+           ↓
+    Returns to prompt: "cli> "
+
+
+AVAILABLE COMMANDS
+═══════════════════
+
+    ip      - Show interfaces (DYNAMICALLY LOADED from OS)
+    help    - Show this help
+    clear   - Clear screen
+    exit    - Exit CLI
+
+
+FILES IN THIS FOLDER
+═════════════════════
+
+ESSENTIAL:
+    simple_cli.c              ← Main program (230 lines, easy to read)
+    simple_cli                ← Compiled executable (ready to run)
+    Makefile                  ← Build script
+
+DOCUMENTATION:
+    START_HERE.txt            ← This file (quick start)
+    QUICKSTART.md             ← 3-step setup guide
+    OVERVIEW.md               ← High-level overview
+    README_SIMPLE_CLI.md      ← Detailed technical guide
+    SUMMARY.txt               ← Complete reference
+
+OLDER EXAMPLES:
+    test_expand.c             ← Standalone test (no CLI loop)
+    test_expand                ← Compiled test
+    ifconfig_cli.c            ← Full CLIgen integration (requires libcligen)
+    ifconfig_cli.cli          ← CLIgen syntax file
+    EXPANSION_EXAMPLE_SUMMARY.md
+    DYNAMIC_EXPANSION_EXAMPLE.md
+    EXPANSION_FLOW.txt
+
+
+WHY THIS EXAMPLE IS GOOD
+═════════════════════════
+
+✓ Shows the CONCEPT of dynamic expansion
+✓ Simple code (only 230 lines)
+✓ Actually runs and shows real data
+✓ Easy to understand and modify
+✓ No external dependencies (just libc)
+✓ Demonstrates why CLIgen is useful
+
+
+THE CONCEPT VISUALIZED
+═══════════════════════════════════════════════════════════════════════════
+
+WITHOUT Dynamic Loading (BAD):
+  ────────────────────────────
+
+  CLI Source Code:
+  ┌──────────────────────────┐
+  │ char *if[] = {           │
+  │   "eth0",                │
+  │   "eth1",                │
+  │   "docker0"              │
+  │ };                       │
+  │                          │
+  │ // Recompile if you add  │
+  │ // a new interface!      │
+  └──────────────────────────┘
+
+  Problem: Hardcoded, static, must recompile
+
+
+WITH Dynamic Loading (GOOD - This Program):
+  ───────────────────────────────────────────
+
+  CLI Runtime:
+  ┌──────────────────────────┐
+  │ getifaddrs()  ←── Query  │
+  │      ↓              OS   │
+  │ System returns:          │
+  │   lo, ens192, docker0    │
+  │      ↓                   │
+  │ Display in table         │
+  │                          │
+  │ // Works everywhere!     │
+  │ // No recompilation!     │
+  └──────────────────────────┘
+
+  Benefit: Automatic, flexible, portable
+
+
+TEST IT AUTOMATED
+══════════════════════════════════════════════════════════════════════════
+
+Run with pre-scripted commands (no manual typing needed):
+
+    echo -e "ip\nexit" | ./simple_cli
+
+This automatically types "ip" and "exit" for you.
+
+
+NEXT STEPS
+═══════════════════════════════════════════════════════════════════════════
+
+Beginner:
+  1. ✓ Run: ./simple_cli          (already did this)
+  2. → Read: simple_cli.c          (understand the code)
+  3. → Modify: Add a new command   (extend it)
+
+Intermediate:
+  4. → Learn: getifaddrs() system call
+  5. → Add: More queries (routing, dns, stats)
+  6. → Integrate: With database or API
+
+Advanced:
+  7. → Study: /home/sartura/aprcela/cligen/
+  8. → Build: Full CLIgen application
+  9. → Deploy: Production CLI
+
+
+THE BIG PICTURE
+═══════════════════════════════════════════════════════════════════════════
+
+This simple example shows what CLIgen does automatically:
+
+SIMPLE PROGRAM (this one):
+  • Handles 1 command: "ip"
+  • Simple loop
+  • Manual parsing
+  • Hardcoded output format
+
+CLIGEN (what you'd build with it):
+  • Handles many commands
+  • Hierarchical menus
+  • Automatic parsing & validation
+  • Auto-generated help
+  • Automatic tab-completion
+  • Dynamic expansion at every parameter
+  • Type checking
+  • Much less code!
+
+This program is the foundation concept that CLIgen automates.
+
+
+TROUBLESHOOTING
+═══════════════════════════════════════════════════════════════════════════
+
+Q: "gcc: command not found"
+A: Install build tools: sudo apt-get install build-essential
+
+Q: "getifaddrs not declared"
+A: Compile with: gcc -D_DEFAULT_SOURCE ...
+   (The Makefile already has this)
+
+Q: Program doesn't show interfaces
+A: Run with: ./simple_cli
+   Then type: ip
+   (Make sure you're in the right directory)
+
+Q: Can't find the folder
+A: ls /home/sartura/aprcela/cligen_example/
+
+Q: Want to edit the code
+A: nano simple_cli.c
+   (or use your favorite editor)
+
+
+KEY FUNCTIONS IN CODE
+═══════════════════════════════════════════════════════════════════════════
+
+getifaddrs()
+  • What: Query OS for interfaces
+  • Where: simple_cli.c, line 27
+  • How: Standard C library function
+  • Result: List of all interfaces
+  • Key: This is what makes it DYNAMIC
+
+get_interfaces()
+  • What: Wrapper around getifaddrs()
+  • Where: simple_cli.c, line 27-57
+  • How: Populates interface_info array
+  • Result: Array of interface data
+  • Key: Called every time user types "ip"
+
+display_interfaces()
+  • What: Format and display the table
+  • Where: simple_cli.c, line 59-79
+  • How: ASCII art formatting
+  • Result: Pretty output
+  • Key: Makes it user-friendly
+
+main()
+  • What: The CLI loop
+  • Where: simple_cli.c, line 117+
+  • How: Read input → process command → repeat
+  • Result: Interactive experience
+  • Key: Classic CLI pattern
+
+
+NOW GO FORTH!
+═══════════════════════════════════════════════════════════════════════════
+
+You have everything you need:
+
+  1. ✓ Working code (simple_cli.c)
+  2. ✓ Compiled binary (simple_cli)
+  3. ✓ Documentation (multiple guides)
+  4. ✓ Examples and tests
+
+Ready to:
+  □ Run it: ./simple_cli
+  □ Understand it: Read simple_cli.c
+  □ Modify it: Add new commands
+  □ Learn CLIgen: Study cligen/ folder
+  □ Build your own: Create a production CLI
+
+
+REMEMBER
+═════════════════════════════════════════════════════════════════════════════
+
+This program demonstrates:
+  ✓ Endless CLI loop
+  ✓ Dynamic interface loading (not hardcoded)
+  ✓ Command processing
+  ✓ Why CLIgen is useful
+
+The key is: getifaddrs() queries the OS AT RUNTIME
+           No hardcoding, no recompilation, works everywhere!
+
+
+═════════════════════════════════════════════════════════════════════════════
+
+                    Ready? Type: ./simple_cli
+
+═════════════════════════════════════════════════════════════════════════════
