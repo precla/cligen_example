@@ -15,6 +15,9 @@
 #include <unistd.h>
 
 #include <cligen/cligen.h>
+#ifndef NULL
+#include <cligen/cligen_buf.h>
+#endif
 #include "network_spec.h"
 
 #define MAX_INTERFACES 1024
@@ -125,11 +128,7 @@ int expand_interface(cligen_handle h,
     for (int i = 0; i < interface_count; i++) {
         cvec_add_string(commands, NULL, interfaces[i].name);
 
-        snprintf(help, sizeof(help), "%s (%s) '%s' '%s'",
-                 interfaces[i].name,
-                 interfaces[i].status,
-                 interfaces[i].ip,
-                 interfaces[i].ip6);
+        snprintf(help, sizeof(help), "%s (%s) '%s' '%s'", interfaces[i].name, interfaces[i].status, interfaces[i].ip, interfaces[i].ip6);
         cvec_add_string(helptexts, NULL, help);
     }
 
@@ -148,10 +147,7 @@ int show_interfaces(cligen_handle h, cvec *cvv, cvec *argv)
     cligen_output(stdout, "\nInterface            Status       IP Address\n");
 
     for (int i = 0; i < interface_count; i++) {
-        cligen_output(stdout, "%-18s %-10s %-21s\n",
-                   interfaces[i].name,
-                   interfaces[i].status,
-                   interfaces[i].ip);
+        cligen_output(stdout, "%-18s %-10s %-21s\n", interfaces[i].name, interfaces[i].status, interfaces[i].ip);
     }
 
     cligen_output(stdout, "\n");
@@ -265,7 +261,7 @@ int remove_interface_ip(cligen_handle h, cvec *cvv, cvec *argv)
     }
     ifname = cv_string_get(cv);
 
-    cligen_output(stdout, "\n✓ IP Removed\n");
+    cligen_output(stdout, "\nIP Removed\n");
     cligen_output(stdout, "  Interface: %s\n", ifname);
     cligen_output(stdout, "  Status: IP address would be removed\n\n");
     cligen_output(stdout, "  [Note: This would run: ip addr del <current-ip> dev %s]\n\n", ifname);
@@ -285,7 +281,7 @@ int remove_interface_ipv6(cligen_handle h, cvec *cvv, cvec *argv)
     }
     ifname = cv_string_get(cv);
 
-    cligen_output(stdout, "\n✓ IP Removed\n");
+    cligen_output(stdout, "\nIP Removed\n");
     cligen_output(stdout, "  Interface: %s\n", ifname);
     cligen_output(stdout, "  Status: IP address would be removed\n\n");
     cligen_output(stdout, "  [Note: This would run: ip addr del <current-ip> dev %s]\n\n", ifname);
@@ -322,14 +318,85 @@ int set_mtu(cligen_handle h, cvec *cvv, cvec *argv)
     return 0;
 }
 
-int help_cmd(cligen_handle h, cvec *cvv, cvec *argv)
+#ifndef NULL
+static void print_help_recursive(cbuf *cb, cg_obj *co, int depth)
 {
-    pt_head *head = NULL;
-    while ((head = cligen_ph_each(h, head)) != NULL) {
-        parse_tree *pt = cligen_ph_parsetree_get(head);
-        cligen_help(h, stdout, pt);
+    if (!co || (co->co_flags & CO_FLAGS_HIDE))
+        return;
+
+    size_t saved_len = cbuf_len(cb);
+
+    if (depth > 0)
+        cprintf(cb, " ");
+
+    if (co->co_type == CO_VARIABLE) {
+        const char *typestr = cv_type2str(co->co_vtype);
+        cprintf(cb, "<%s:%s>", co->co_command ? co->co_command : "?", typestr ? typestr : "?");
+    } else if (co->co_command) {
+        cprintf(cb, "%s", co->co_command);
     }
 
+    int is_leaf = (co->co_callbacks != NULL);
+
+    if (is_leaf) {
+        const char *cmd = cbuf_get(cb);
+        size_t cmd_len = cbuf_len(cb);
+        const char *help = co->co_helpstring;
+
+        size_t pad = COLUMN_MIN_WIDTH;
+        if (cmd_len > pad)
+            pad = ((cmd_len / COLUMN_MIN_WIDTH) + 1) * COLUMN_MIN_WIDTH;
+
+        cligen_output(stdout, "  %-*s%s\n", (int)pad, cmd, help ? help : "");
+    }
+
+    if (!is_leaf) {
+        for (int i = 0; i < co->co_pt_len; i++) {
+            parse_tree *child_pt = co->co_ptvec[i];
+            if (!child_pt)
+                continue;
+            int len = pt_len_get(child_pt);
+            for (int j = 0; j < len; j++) {
+                cg_obj *child = pt_vec_i_get(child_pt, j);
+                if (child)
+                    print_help_recursive(cb, child, depth + 1);
+            }
+        }
+    }
+
+    cbuf_trunc(cb, saved_len);
+}
+#endif
+
+int help_cmd(cligen_handle h, cvec *cvv, cvec *argv)
+{
+#ifndef NULL
+    cbuf *cb = cbuf_new();
+    if (!cb)
+        return -1;
+#endif
+
+    pt_head *head = NULL;
+    while ((head = cligen_ph_each(h, head)) != NULL) {
+#ifdef NULL
+        cligen_help(h, stdout, cligen_ph_parsetree_get(head));
+#endif
+#ifndef NULL
+        parse_tree *pt = cligen_ph_parsetree_get(head);
+        if (!pt)
+            continue;
+        int len = pt_len_get(pt);
+        for (int i = 0; i < len; i++) {
+            cg_obj *co = pt_vec_i_get(pt, i);
+            if (co)
+                print_help_recursive(cb, co, 0);
+        }
+#endif
+    }
+
+#ifndef NULL
+    cbuf_free(cb);
+#endif
     return 0;
 }
 
@@ -382,8 +449,6 @@ static expand_cb *str2fn_expand(const char *name, void *arg, char **error)
 
 static void sigint_handler(int sig)
 {
-    cligen_output(stdout, "\n\nReceived SIGINT. Cleaning up...\n");
-
     if (g_cli_handle)
         cligen_exit(g_cli_handle);
 
@@ -401,14 +466,13 @@ int main(void)
     cvec *globals = NULL;
     const char * prompt = NULL;
 
-    cligen_output(stdout, "\n");
-    cligen_output(stdout, "╔════════════════════════════════════════════════════════════╗\n");
-    cligen_output(stdout, "║  Network Configuration CLI - CLIgen with Embedded Spec     ║\n");
+    cligen_output(stdout, "\n╔════════════════════════════════════════════════════════════╗\n");
+    cligen_output(stdout, "║                   Network Configuration CLI                ║\n");
     cligen_output(stdout, "║                                                            ║\n");
     cligen_output(stdout, "║  Features:                                                 ║\n");
     cligen_output(stdout, "║  • CLI spec compiled into binary (no network.cli needed)   ║\n");
     cligen_output(stdout, "║  • Tab completion for interface names                      ║\n");
-    cligen_output(stdout, "║  • Type validation (IPv4 addresses)                        ║\n");
+    cligen_output(stdout, "║  • Type validation (IPv4/v6 addresses)                     ║\n");
     cligen_output(stdout, "║  • Command history and editing                             ║\n");
     cligen_output(stdout, "║                                                            ║\n");
     cligen_output(stdout, "║  Type 'help' for available commands                        ║\n");
@@ -426,8 +490,6 @@ int main(void)
     globals = cvec_new(0);
     if (clispec_parse_str(g_cli_handle, embedded_cli_spec, "qn-cli", NULL, NULL, globals) < 0) {
         cligen_output(stderr, "Error: Failed to parse embedded CLI spec\n");
-        cvec_free(globals);
-        cligen_exit(g_cli_handle);
         goto error_out;
     }
 
@@ -452,6 +514,7 @@ int main(void)
     }
 
     cvec_free(globals);
+    globals = NULL;
 
     /* Run the CLI */
     if (cligen_loop(g_cli_handle) < 0) {
