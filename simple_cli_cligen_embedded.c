@@ -15,10 +15,12 @@
 #include <unistd.h>
 
 #include <cligen/cligen.h>
-#ifndef NULL
+#ifndef TREE
 #include <cligen/cligen_buf.h>
 #endif
 #include "network_spec.h"
+
+#define TREE 0
 
 #define MAX_INTERFACES 1024
 
@@ -139,9 +141,17 @@ int expand_interface(cligen_handle h,
 
 int show_interfaces(cligen_handle h, cvec *cvv, cvec *argv)
 {
+    int error = 0;
+
+    error = get_interfaces(MAX_INTERFACES);
+    if (error) {
+        cligen_output(stderr, "Error getting interfaces\n");
+        goto error_out;
+    }
+
     if (interface_count < 0) {
         cligen_output(stdout, "No interfaces available\n");
-        return -1;
+        goto error_out;
     }
 
     cligen_output(stdout, "\nInterface            Status       IP Address\n");
@@ -152,7 +162,13 @@ int show_interfaces(cligen_handle h, cvec *cvv, cvec *argv)
 
     cligen_output(stdout, "\n");
 
-    return 0;
+    goto out;
+
+error_out:
+    error = -1;
+
+out:
+    return error ? -1 : 0;
 }
 
 int show_interface(cligen_handle h, cvec *cvv, cvec *argv)
@@ -318,7 +334,7 @@ int set_mtu(cligen_handle h, cvec *cvv, cvec *argv)
     return 0;
 }
 
-#ifndef NULL
+#ifndef TREE
 static void print_help_recursive(cbuf *cb, cg_obj *co, int depth)
 {
     if (!co || (co->co_flags & CO_FLAGS_HIDE))
@@ -370,7 +386,7 @@ static void print_help_recursive(cbuf *cb, cg_obj *co, int depth)
 
 int help_cmd(cligen_handle h, cvec *cvv, cvec *argv)
 {
-#ifndef NULL
+#ifndef TREE
     cbuf *cb = cbuf_new();
     if (!cb)
         return -1;
@@ -378,10 +394,10 @@ int help_cmd(cligen_handle h, cvec *cvv, cvec *argv)
 
     pt_head *head = NULL;
     while ((head = cligen_ph_each(h, head)) != NULL) {
-#ifdef NULL
+#ifdef TREE
         cligen_help(h, stdout, cligen_ph_parsetree_get(head));
 #endif
-#ifndef NULL
+#ifndef TREE
         parse_tree *pt = cligen_ph_parsetree_get(head);
         if (!pt)
             continue;
@@ -394,7 +410,7 @@ int help_cmd(cligen_handle h, cvec *cvv, cvec *argv)
 #endif
     }
 
-#ifndef NULL
+#ifndef TREE
     cbuf_free(cb);
 #endif
     return 0;
