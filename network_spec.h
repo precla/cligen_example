@@ -44,6 +44,7 @@ static const char *embedded_cli_spec =
 "show(\"Show network configuration\") {\n"
 "    interfaces(\"Show all interfaces\"), show_interfaces();\n"
 "    interface <ifname:string interface()>(\"Interface name\"), show_interface();\n"
+"    history (\"Show history\"), show_history();\n"
 "}\n"
 "\n"
 "# Leave configuration mode, back to operational mode\n"

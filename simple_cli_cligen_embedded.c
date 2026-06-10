@@ -225,6 +225,14 @@ int show_interface(cligen_handle h, cvec *cvv, cvec *argv)
     return 0;
 }
 
+int show_history(cligen_handle h, cvec *cvv, cvec *argv)
+{
+    cligen_hist_file_save(g_cli_handle, stdout);
+
+    return 0;
+}
+
+
 int set_interface_ip(cligen_handle h, cvec *cvv, cvec *argv)
 {
     cg_var *cv;
@@ -456,6 +464,8 @@ cgv_fnstype_t *str2fn(const char *name, void *arg, char **error)
         return show_interfaces;
     if (strcmp(name, "show_interface") == 0)
         return show_interface;
+    if (strcmp(name, "show_history") == 0)
+        return show_history;
     if (strcmp(name, "set_interface_ip") == 0)
         return set_interface_ip;
     if (strcmp(name, "remove_interface_ip") == 0)
@@ -525,6 +535,8 @@ int main(void)
     }
 
     signal(SIGINT, sigint_handler);
+
+    cligen_hist_init(g_cli_handle, 10);
 
     /* Parse CLI specification from string */
     globals = cvec_new(0);
