@@ -1,55 +1,66 @@
-# Network Configuration CLI Specification
-# This file defines the CLI syntax using CLIgen format
+# One shared operational mode for everyone, plus a config mode that only
+# privileged users can reach. Implemented with CLIgen named trees.
 #
-# Cisco-style modes: two named trees are defined below.
-#   'base'   - operational mode,  prompt 'network> '
-#   'config' - configuration mode, prompt 'network(cfg)> '
-# The 'mode' callback switches the active tree and the prompt.
+#   guest mode  -> show + help + quit             (prompt: network> )
+#   staff mode  -> show + help + quit + 'config'  (prompt: network> )
+#   config mode -> interface configuration        (prompt: network(config)> )
+#
+# Operator and admin land in 'staff' and can type 'config' to enter config
+# mode. Guests land in 'guest', which has no 'config' command at all.
+#
+# NOTE: commands are inlined per tree (not pulled in via '@tree' references).
+# A bare top-level '@tree' reference sitting next to a callback command (e.g.
+# 'config') left that command's callback unresolved in this CLIgen build, so
+# entering config silently did nothing. Inlining is the robust pattern.
+#
+# The first parsed tree ('guest') is the default active tree before login.
 
 prompt = "network> ";
 comment = "#";
 
-# ===== Operational mode (default/active tree) =====
-treename = "base";
-
-# Show available interfaces dynamically
+# ===== Operational mode: guest variant (no 'config') =====
+treename = "guest";
 show("Show network configuration") {
     interfaces("Show all interfaces"), show_interfaces();
     interface <ifname:string interface()>("Interface name"), show_interface();
+    history("Show history"), show_history();
 }
-
-# Enter configuration mode
-config("Enter configuration mode"), mode("config", "network(config)> ");
-
-help("Show help"), help_cmd();
+help("Show help for this mode"), help_cmd();
 quit("Quit the CLI"), quit_cmd();
 
-# ===== Configuration mode =====
-treename = "config";
+# ===== Operational mode: operator/admin variant (adds 'config') =====
+treename = "staff";
+show("Show network configuration") {
+    interfaces("Show all interfaces"), show_interfaces();
+    interface <ifname:string interface()>("Interface name"), show_interface();
+    history("Show history"), show_history();
+}
+config("Enter configuration mode"), mode("config", "network(config)>");
+help("Show help for this mode"), help_cmd();
+quit("Quit the CLI"), quit_cmd();
 
+# ===== Configuration mode (reached from 'staff' via 'config') =====
+treename = "config";
+hostname("Change hostname") {
+    <hostname:string length[8:32]>("hostname"), set_hostname();
+}
 history("Change command history size") {
     <size:uint16 range[5:100]>("history size"), set_history_size();
 }
-
 # Configure interface settings
 interface <ifname:string interface()>("Interface name") {
-    ip <ipaddr:ipv4addr>("IP address"), set_interface_ip();
-    no ip("remove IP address"), remove_interface_ip();
+    ip <ipaddr:ipv4addr>("IPv4 address"), set_interface_ip();
+    no ip("Remove IPv4 address"), remove_interface_ip();
     ipv6 <ipaddr:ipv6addr>("IPv6 address"), set_interface_ipv6();
-    no ipv6("remove IPv6 address"), remove_interface_ipv6();
+    no ipv6("Remove IPv6 address"), remove_interface_ipv6();
     mtu <size:uint16 range[68:65535]>("MTU size"), set_mtu();
 }
-
-# Show is also available inside config mode
 show("Show network configuration") {
     interfaces("Show all interfaces"), show_interfaces();
     interface <ifname:string interface()>("Interface name"), show_interface();
-    history (Show history), show_history();
+    history("Show history"), show_history();
 }
-
-# Leave configuration mode, back to operational mode
-exit("Exit configuration mode"), mode("base", "network> ");
-end("Exit configuration mode"), mode("base", "network> ");
-
-help("Show help"), help_cmd();
+exit("Leave configuration mode"), mode("staff", "network> ");
+end("Leave configuration mode"), mode("staff", "network> ");
+help("Show help for this mode"), help_cmd();
 quit("Quit the CLI"), quit_cmd();

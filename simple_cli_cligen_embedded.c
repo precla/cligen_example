@@ -137,25 +137,47 @@ int expand_interface(cligen_handle h,
     return 0;
 }
 
+/* ===== ROLES / SESSION =====
+ *
+ * Each role maps 1:1 onto a CLIgen mode tree (defined in network_spec.h) and a
+ * prompt. The active tree is chosen once, at login, from the user's role - the
+ * user can only ever match commands that exist in that tree (CLIgen only parses
+ * against the active tree), so access control is structural, not a per-command
+ * check.
+ */
+typedef enum {
+    ROLE_GUEST    = 0,
+    ROLE_OPERATOR = 1,
+    ROLE_ADMIN    = 2,
+} cli_role;
+
+typedef struct {
+    char     username[64];
+    cli_role role;
+} cli_session;
+
+/* Base-mode tree per role. Guests get the tree without 'config'; operator and
+ * admin get the one that exposes 'config'. The base prompt is the same for
+ * everyone ("network> ") - only entering config mode changes it. */
+static const char *role_tree[] = {
+    "guest",   /* ROLE_GUEST    */
+    "staff",   /* ROLE_OPERATOR */
+    "staff",   /* ROLE_ADMIN    */
+};
+
 /* ===== COMMAND CALLBACKS ===== */
 
-/* Cisco-style mode switch: change the active parse tree and the prompt.
- *   argv[0] = name of the tree to make active (the new "mode")
- *   argv[1] = prompt string to display while in that mode
- */
+/* Switch the active parse tree (the "mode") and the prompt.
+ *   argv[0] = tree to make active   argv[1] = prompt to show */
 int mode(cligen_handle h, cvec *cvv, cvec *argv)
 {
-    char *treename;
-    char *prompt;
-
-    treename = cv_string_get(cvec_i(argv, 0));
-    prompt = cv_string_get(cvec_i(argv, 1));
+    char *treename = cv_string_get(cvec_i(argv, 0));
+    char *prompt   = cv_string_get(cvec_i(argv, 1));
 
     if (cligen_ph_active_set_byname(h, treename) < 0) {
         cligen_output(stderr, "Error: no such mode '%s'\n", treename);
         return -1;
     }
-
     cligen_prompt_set(h, prompt);
 
     return 0;
@@ -227,7 +249,7 @@ int show_interface(cligen_handle h, cvec *cvv, cvec *argv)
 
 int show_history(cligen_handle h, cvec *cvv, cvec *argv)
 {
-    cligen_hist_file_save(g_cli_handle, stdout);
+    cligen_hist_file_save(h, stdout);
 
     return 0;
 }
@@ -377,16 +399,32 @@ int set_history_size(cligen_handle h, cvec *cvv, cvec *argv)
     size = cv_uint16_get(cv);
 
     printf("setting history to %u\n", size);
-    cligen_hist_init(g_cli_handle, (int)size);
+    cligen_hist_init(h, (int)size);
 
     return 0;
 }
 
 #ifndef TREE
-static void print_help_recursive(cbuf *cb, cg_obj *co, int depth)
+static void print_help_recursive(cligen_handle h, cbuf *cb, cg_obj *co, int depth)
 {
     if (!co || (co->co_flags & CO_FLAGS_HIDE))
         return;
+
+    /* '@<tree>' reference: splice in the referenced tree's commands at this
+     * level so 'help' reflects what the mode actually exposes. */
+    if (co->co_type == CO_REFERENCE) {
+        pt_head *rh = cligen_ph_find(h, co->co_command);
+        parse_tree *rpt = rh ? cligen_ph_parsetree_get(rh) : NULL;
+        if (rpt) {
+            int rlen = pt_len_get(rpt);
+            for (int k = 0; k < rlen; k++) {
+                cg_obj *rco = pt_vec_i_get(rpt, k);
+                if (rco)
+                    print_help_recursive(h, cb, rco, depth);
+            }
+        }
+        return;
+    }
 
     size_t saved_len = cbuf_len(cb);
 
@@ -423,7 +461,7 @@ static void print_help_recursive(cbuf *cb, cg_obj *co, int depth)
             for (int j = 0; j < len; j++) {
                 cg_obj *child = pt_vec_i_get(child_pt, j);
                 if (child)
-                    print_help_recursive(cb, child, depth + 1);
+                    print_help_recursive(h, cb, child, depth + 1);
             }
         }
     }
@@ -434,31 +472,29 @@ static void print_help_recursive(cbuf *cb, cg_obj *co, int depth)
 
 int help_cmd(cligen_handle h, cvec *cvv, cvec *argv)
 {
-#ifndef TREE
+    /* Help for the active mode only - cligen only matches against the active
+     * tree, so this is exactly what the current user can run. (Interactive '?'
+     * is the authoritative, context-sensitive variant.) */
+    pt_head *head = cligen_ph_active_get(h);
+    parse_tree *pt = head ? cligen_ph_parsetree_get(head) : NULL;
+
+    if (!pt)
+        return 0;
+
+#ifdef TREE
+    cligen_help(h, stdout, pt);
+#else
     cbuf *cb = cbuf_new();
     if (!cb)
         return -1;
-#endif
 
-    pt_head *head = NULL;
-    while ((head = cligen_ph_each(h, head)) != NULL) {
-#ifdef TREE
-        cligen_help(h, stdout, cligen_ph_parsetree_get(head));
-#endif
-#ifndef TREE
-        parse_tree *pt = cligen_ph_parsetree_get(head);
-        if (!pt)
-            continue;
-        int len = pt_len_get(pt);
-        for (int i = 0; i < len; i++) {
-            cg_obj *co = pt_vec_i_get(pt, i);
-            if (co)
-                print_help_recursive(cb, co, 0);
-        }
-#endif
+    int len = pt_len_get(pt);
+    for (int i = 0; i < len; i++) {
+        cg_obj *co = pt_vec_i_get(pt, i);
+        if (co)
+            print_help_recursive(h, cb, co, 0);
     }
 
-#ifndef TREE
     cbuf_free(cb);
 #endif
     return 0;
@@ -526,6 +562,43 @@ static void sigint_handler(int sig)
     exit(0);
 }
 
+/* ===== AUTHENTICATION (pre-loop) =====
+ *
+ * CLIgen has no concept of users/passwords - authentication is done here,
+ * before cligen_loop(), and the resulting role decides which mode tree the
+ * user is dropped into. Replace the demo lookup with PAM / shadow / your store
+ * (and a real password check via getpass()).
+ */
+static int do_login(cli_session *sess)
+{
+    static const struct {
+        const char *user;
+        cli_role    role;
+    } users[] = {
+        { "admin",    ROLE_ADMIN    },
+        { "operator", ROLE_OPERATOR },
+        { "guest",    ROLE_GUEST    },
+    };
+    char line[128];
+
+    cligen_output(stdout, "login: ");
+    fflush(stdout);
+    if (fgets(line, sizeof(line), stdin) == NULL)
+        return -1;
+    line[strcspn(line, "\r\n")] = '\0';
+
+    for (size_t i = 0; i < sizeof(users) / sizeof(users[0]); i++) {
+        if (strcmp(line, users[i].user) == 0) {
+            strncpy(sess->username, line, sizeof(sess->username) - 1);
+            sess->role = users[i].role;
+            return 0;
+        }
+    }
+
+    cligen_output(stderr, "Unknown user '%s'\n", line);
+    return -1;
+}
+
 /* ===== MAIN PROGRAM ===== */
 
 int main(void)
@@ -565,10 +638,6 @@ int main(void)
         goto error_out;
     }
 
-    if ((prompt = cvec_find_str(globals, "prompt")) != NULL) {
-        cligen_prompt_set(g_cli_handle, prompt);
-    }
-
     /* Register callbacks and expands for all parse trees */
     head = NULL;
     while ((head = cligen_ph_each(g_cli_handle, head)) != NULL) {
@@ -587,6 +656,32 @@ int main(void)
 
     cvec_free(globals);
     globals = NULL;
+
+    /* Authenticate, then activate the mode (parse tree) + prompt for the role.
+     * 'sess' is static so it outlives main()'s stack frame for the loop's use. */
+    static cli_session sess;
+    if (do_login(&sess) < 0)
+        goto error_out;
+
+    /* NOTE: do NOT call cligen_userhandle_set() here. If set, CLIgen passes the
+     * userhandle (&sess) as the first arg to every callback instead of the
+     * cligen handle, which breaks callbacks that call cligen APIs (e.g. mode()
+     * calling cligen_ph_active_set_byname/cligen_prompt_set). If you need the
+     * session inside a callback, reach it via a global or store the cligen
+     * handle inside the session - keep g_cli_handle for cligen API calls. */
+
+    if (cligen_ph_active_set_byname(g_cli_handle, role_tree[sess.role]) < 0) {
+        cligen_output(stderr, "Error: cannot activate mode '%s'\n", role_tree[sess.role]);
+        goto error_out;
+    }
+
+    if ((prompt = cvec_find_str(globals, "prompt")) != NULL) {
+        cligen_prompt_set(g_cli_handle, prompt);
+    } else {
+         cligen_prompt_set(g_cli_handle, "network> ");
+    }   
+
+    cligen_output(stdout, "\nLogged in as '%s'. Type 'help' or '?'.\n\n", sess.username);
 
     /* Run the CLI */
     if (cligen_loop(g_cli_handle) < 0) {
