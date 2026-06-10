@@ -607,7 +607,6 @@ int main(void)
     parse_tree *tree = NULL;
     pt_head *head = NULL;
     cvec *globals = NULL;
-    const char * prompt = NULL;
 
     cligen_output(stdout, "\n╔════════════════════════════════════════════════════════════╗\n");
     cligen_output(stdout, "║                   Network Configuration CLI                ║\n");
@@ -674,12 +673,9 @@ int main(void)
         cligen_output(stderr, "Error: cannot activate mode '%s'\n", role_tree[sess.role]);
         goto error_out;
     }
-
-    if ((prompt = cvec_find_str(globals, "prompt")) != NULL) {
-        cligen_prompt_set(g_cli_handle, prompt);
-    } else {
-         cligen_prompt_set(g_cli_handle, "network> ");
-    }   
+    /* Base prompt is the same for every role; only entering config mode changes
+     * it. (globals is already freed here, so don't read 'prompt' from it.) */
+    cligen_prompt_set(g_cli_handle, "network> ");
 
     cligen_output(stdout, "\nLogged in as '%s'. Type 'help' or '?'.\n\n", sess.username);
 

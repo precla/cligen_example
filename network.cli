@@ -8,10 +8,8 @@
 # Operator and admin land in 'staff' and can type 'config' to enter config
 # mode. Guests land in 'guest', which has no 'config' command at all.
 #
-# NOTE: commands are inlined per tree (not pulled in via '@tree' references).
-# A bare top-level '@tree' reference sitting next to a callback command (e.g.
-# 'config') left that command's callback unresolved in this CLIgen build, so
-# entering config silently did nothing. Inlining is the robust pattern.
+# Shared operational commands (show/help/quit) are written ONCE in
+# 'base_common' and pulled into each mode with '@base_common'.
 #
 # The first parsed tree ('guest') is the default active tree before login.
 
@@ -20,47 +18,36 @@ comment = "#";
 
 # ===== Operational mode: guest variant (no 'config') =====
 treename = "guest";
-show("Show network configuration") {
-    interfaces("Show all interfaces"), show_interfaces();
-    interface <ifname:string interface()>("Interface name"), show_interface();
-    history("Show history"), show_history();
-}
-help("Show help for this mode"), help_cmd();
-quit("Quit the CLI"), quit_cmd();
+@base_common;
 
 # ===== Operational mode: operator/admin variant (adds 'config') =====
 treename = "staff";
-show("Show network configuration") {
-    interfaces("Show all interfaces"), show_interfaces();
-    interface <ifname:string interface()>("Interface name"), show_interface();
-    history("Show history"), show_history();
-}
+@base_common;
 config("Enter configuration mode"), mode("config", "network(config)>");
-help("Show help for this mode"), help_cmd();
-quit("Quit the CLI"), quit_cmd();
 
 # ===== Configuration mode (reached from 'staff' via 'config') =====
 treename = "config";
-hostname("Change hostname") {
-    <hostname:string length[8:32]>("hostname"), set_hostname();
-}
 history("Change command history size") {
     <size:uint16 range[5:100]>("history size"), set_history_size();
 }
 # Configure interface settings
 interface <ifname:string interface()>("Interface name") {
-    ip <ipaddr:ipv4addr>("IPv4 address"), set_interface_ip();
+    ip <ipaddr:ipv4addr>("IP address"), set_interface_ip();
     no ip("Remove IPv4 address"), remove_interface_ip();
     ipv6 <ipaddr:ipv6addr>("IPv6 address"), set_interface_ipv6();
     no ipv6("Remove IPv6 address"), remove_interface_ipv6();
     mtu <size:uint16 range[68:65535]>("MTU size"), set_mtu();
 }
+@base_common;
+exit("Leave configuration mode"), mode("staff", "network> ");
+end("Leave configuration mode"), mode("staff", "network> ");
+
+# ===== Shared operational commands (referenced, never activated directly) =====
+treename = "base_common";
 show("Show network configuration") {
     interfaces("Show all interfaces"), show_interfaces();
     interface <ifname:string interface()>("Interface name"), show_interface();
     history("Show history"), show_history();
 }
-exit("Leave configuration mode"), mode("staff", "network> ");
-end("Leave configuration mode"), mode("staff", "network> ");
 help("Show help for this mode"), help_cmd();
 quit("Quit the CLI"), quit_cmd();
