@@ -27,6 +27,10 @@ quit("Quit the CLI"), quit_cmd();
 # ===== Configuration mode =====
 treename = "config";
 
+history("Change command history size") {
+    <size:uint16 range[5:100]>("history size"), set_history_size();
+}
+
 # Configure interface settings
 interface <ifname:string interface()>("Interface name") {
     ip <ipaddr:ipv4addr>("IP address"), set_interface_ip();

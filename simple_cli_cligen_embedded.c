@@ -350,7 +350,7 @@ int set_mtu(cligen_handle h, cvec *cvv, cvec *argv)
 
     cv = cvec_find(cvv, "size");
     if (!cv) {
-        cligen_output(stderr, "Error: IP address not found\n");
+        cligen_output(stderr, "Error: MTU size not found\n");
         return -1;
     }
     mtu = cv_uint16_get(cv);
@@ -360,6 +360,24 @@ int set_mtu(cligen_handle h, cvec *cvv, cvec *argv)
     cligen_output(stdout, "  MTU: %d\n", mtu);
     cligen_output(stdout, "  Status: Would be applied\n");
     cligen_output(stdout, "  [Note: This is a simulation]\n");
+
+    return 0;
+}
+
+int set_history_size(cligen_handle h, cvec *cvv, cvec *argv)
+{
+    cg_var *cv;
+    uint16_t size = 0;
+
+    cv = cvec_find(cvv, "size");
+    if (!cv) {
+        cligen_output(stderr, "Error: history size not found\n");
+        return -1;
+    }
+    size = cv_uint16_get(cv);
+
+    printf("setting history to %u\n", size);
+    cligen_hist_init(g_cli_handle, (int)size);
 
     return 0;
 }
@@ -476,6 +494,8 @@ cgv_fnstype_t *str2fn(const char *name, void *arg, char **error)
         return remove_interface_ipv6;
     if (strcmp(name, "set_mtu") == 0)
         return set_mtu;
+    if (strcmp(name, "set_history_size") == 0)
+        return set_history_size;
     if (strcmp(name, "help_cmd") == 0)
         return help_cmd;
     if (strcmp(name, "quit_cmd") == 0)
