@@ -139,6 +139,28 @@ int expand_interface(cligen_handle h,
 
 /* ===== COMMAND CALLBACKS ===== */
 
+/* Cisco-style mode switch: change the active parse tree and the prompt.
+ *   argv[0] = name of the tree to make active (the new "mode")
+ *   argv[1] = prompt string to display while in that mode
+ */
+int mode(cligen_handle h, cvec *cvv, cvec *argv)
+{
+    char *treename;
+    char *prompt;
+
+    treename = cv_string_get(cvec_i(argv, 0));
+    prompt = cv_string_get(cvec_i(argv, 1));
+
+    if (cligen_ph_active_set_byname(h, treename) < 0) {
+        cligen_output(stderr, "Error: no such mode '%s'\n", treename);
+        return -1;
+    }
+
+    cligen_prompt_set(h, prompt);
+
+    return 0;
+}
+
 int show_interfaces(cligen_handle h, cvec *cvv, cvec *argv)
 {
     int error = 0;
@@ -428,6 +450,8 @@ cgv_fnstype_t *str2fn(const char *name, void *arg, char **error)
 {
     *error = NULL;
 
+    if (strcmp(name, "mode") == 0)
+        return mode;
     if (strcmp(name, "show_interfaces") == 0)
         return show_interfaces;
     if (strcmp(name, "show_interface") == 0)

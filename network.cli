@@ -1,8 +1,16 @@
 # Network Configuration CLI Specification
 # This file defines the CLI syntax using CLIgen format
+#
+# Cisco-style modes: two named trees are defined below.
+#   'base'   - operational mode,  prompt 'network> '
+#   'config' - configuration mode, prompt 'network(cfg)> '
+# The 'mode' callback switches the active tree and the prompt.
 
 prompt = "network> ";
 comment = "#";
+
+# ===== Operational mode (default/active tree) =====
+treename = "base";
 
 # Show available interfaces dynamically
 show("Show network configuration") {
@@ -10,17 +18,33 @@ show("Show network configuration") {
     interface <ifname:string interface()>("Interface name"), show_interface();
 }
 
-# Configure interface IP address
-config("Configure network settings") {
-    interface <ifname:string interface()>("Interface name") {
-        ip <ipaddr:ipv4addr>("IP address"), set_interface_ip();
-        no ip, remove_interface_ip();
-        ipv6 <ipaddr:ipv6addr>("IPv6 address"), set_interface_ipv6();
-        no ipv6, remove_interface_ipv6();
-        mtu <size:uint16 range[68:65535]>("MTU size"), set_mtu();
-    }
+# Enter configuration mode
+config("Enter configuration mode"), mode("config", "network(config)> ");
+
+help("Show help"), help_cmd();
+quit("Quit the CLI"), quit_cmd();
+
+# ===== Configuration mode =====
+treename = "config";
+
+# Configure interface settings
+interface <ifname:string interface()>("Interface name") {
+    ip <ipaddr:ipv4addr>("IP address"), set_interface_ip();
+    no ip("remove IP address"), remove_interface_ip();
+    ipv6 <ipaddr:ipv6addr>("IPv6 address"), set_interface_ipv6();
+    no ipv6("remove IPv6 address"), remove_interface_ipv6();
+    mtu <size:uint16 range[68:65535]>("MTU size"), set_mtu();
 }
 
-# Other commands
+# Show is also available inside config mode
+show("Show network configuration") {
+    interfaces("Show all interfaces"), show_interfaces();
+    interface <ifname:string interface()>("Interface name"), show_interface();
+}
+
+# Leave configuration mode, back to operational mode
+exit("Exit configuration mode"), mode("base", "network> ");
+end("Exit configuration mode"), mode("base", "network> ");
+
 help("Show help"), help_cmd();
 quit("Quit the CLI"), quit_cmd();
