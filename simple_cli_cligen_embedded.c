@@ -35,6 +35,8 @@ static cligen_handle g_cli_handle = NULL;
 interface_info interfaces[MAX_INTERFACES];
 int interface_count = 0;
 
+int cligen_loop_custom(cligen_handle h);
+
 /* Get list of interfaces dynamically from OS */
 int get_interfaces(int max_count)
 {
@@ -679,7 +681,7 @@ int main(void)
 	cligen_output(stdout, "\nLogged in as '%s'. Type 'help' or '?'.\n\n", sess.username);
 
 	/* Run the CLI */
-	if (cligen_loop(g_cli_handle) < 0) {
+	if (cligen_loop_custom(g_cli_handle) < 0) {
 		cligen_output(stderr, "Error in CLI loop\n");
 		goto error_out;
 	}
@@ -694,4 +696,46 @@ out:
 	cligen_exit(g_cli_handle);
 
 	return error ? -1 : 0;
+}
+
+int cligen_loop_custom(cligen_handle h)
+{
+	int retval = -1;
+	char *line;
+	int callback_ret = 0;
+	char *reason = NULL;
+	cligen_result result;
+
+	/* Run the CLI command interpreter */
+	while (!cligen_exiting(h)) {
+		if (cliread_eval(h, &line, &callback_ret, &result, &reason) < 0)
+			goto done;
+		switch (result) {
+			case CG_EOF: /* eof */
+				cligen_exiting_set(h, 1);
+				break;
+			case CG_ERROR: /* cligen match errors */
+				printf("[ERR] CLI read error\n");
+				goto done;
+			case CG_NOMATCH: /* no match */
+				printf("[ERR] CLI syntax error in: \"%s\": %s\n", line, reason);
+				break;
+			case CG_MATCH: /* unique match */
+				if (callback_ret < 0)
+					printf("[ERR] CLI callback error\n");
+				break;
+			default: /* multiple matches */
+				printf("[WRN] Ambiguous command\n");
+				break;
+		}
+		if (reason) {
+			free(reason);
+			reason = NULL;
+		}
+	}
+	retval = 0;
+done:
+	if (reason)
+		free(reason);
+	return retval;
 }
