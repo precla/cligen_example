@@ -507,96 +507,6 @@ int quit_cmd(cligen_handle h, cvec *cvv, cvec *argv)
 	return 0;
 }
 
-/* ===== PER-COMMAND HOOK (pre-execution) =====
- *
- * A CLIgen object's co_callbacks is an ordered linked list, and cligen_eval()
- * calls each entry in turn (see cligen_eval() in cligen_read.c). If we PREPEND a
- * common callback to every command's list, it runs after the line is parsed but
- * BEFORE the command's own callback - giving a true pre-execution hook without
- * reimplementing the read/eval loop (we keep stock cligen_loop()).
- *
- * The first element of cvv (named "cmd") is always the whole command line as the
- * user entered it, so the hook sees exactly what was typed.
- *
- * Returning < 0 VETOES the command: cligen_eval() aborts the chain, so the
- * command's own callback never runs.
- */
-static int audit_callback(cligen_handle h, cvec *cvv, cvec *argv)
-{
-	cg_var *cv = cvec_i(cvv, 0); /* "cmd": full command line as entered */
-	char *line = cv ? cv_string_get(cv) : NULL;
-
-	cligen_output(stdout, "[audit] about to execute: \"%s\"\n", line ? line : "");
-
-	/* return -1 here to block this command from executing */
-	return 0;
-}
-
-/* Prepend audit_callback to one command object's callback chain (so it runs
- * first). Guarded so a shared object is never hooked twice. */
-static int attach_audit_cb(cg_obj *co)
-{
-	cg_callback *cc;
-
-	if (co->co_callbacks == NULL || co_callback_fn_get(co->co_callbacks) == audit_callback)
-		return 0; /* nothing to hook, or already hooked */
-
-	if ((cc = malloc(sizeof(*cc))) == NULL)
-		return -1;
-	memset(cc, 0, sizeof(*cc));
-	co_callback_fn_set(cc, audit_callback);
-	cc->cc_fn_str = strdup("audit");
-	cc->cc_cvec = NULL;
-	cc->cc_flags = 0;
-	cc->cc_next = co->co_callbacks; /* link in front of the real callback(s) */
-	co->co_callbacks = cc;
-
-	return 0;
-}
-
-/* Walk a parse tree recursively and hook every command endpoint (any object
- * that carries callbacks). */
-static int attach_audit_recursive(cg_obj *co)
-{
-	if (co == NULL || co->co_type == CO_REFERENCE)
-		return 0;
-
-	if (attach_audit_cb(co) < 0)
-		return -1;
-
-	for (int i = 0; i < co->co_pt_len; i++) {
-		parse_tree *child_pt = co->co_ptvec[i];
-		if (!child_pt)
-			continue;
-		int len = pt_len_get(child_pt);
-		for (int j = 0; j < len; j++) {
-			if (attach_audit_recursive(pt_vec_i_get(child_pt, j)) < 0)
-				return -1;
-		}
-	}
-
-	return 0;
-}
-
-/* Hook every command in every parse tree of the handle. */
-static int install_audit_hook(cligen_handle h)
-{
-	pt_head *ph = NULL;
-
-	while ((ph = cligen_ph_each(h, ph)) != NULL) {
-		parse_tree *pt = cligen_ph_parsetree_get(ph);
-		if (!pt)
-			continue;
-		int len = pt_len_get(pt);
-		for (int i = 0; i < len; i++) {
-			if (attach_audit_recursive(pt_vec_i_get(pt, i)) < 0)
-				return -1;
-		}
-	}
-
-	return 0;
-}
-
 /* ===== CALLBACK REGISTRATION ===== */
 
 cgv_fnstype_t *str2fn(const char *name, void *arg, char **error)
@@ -697,6 +607,31 @@ static void sigint_handler(int sig)
 // 	return 0;
 // }
 
+/* Eval-wrap hook: invoked by cligen_eval() before and after every command
+ * callback. On the pre-call *wh is NULL; we allocate a wrap handle so cligen
+ * also issues the post-call, then free it ourselves so the next callback in the
+ * same command re-inits cleanly. The return value is informational only -
+ * cligen_eval() does not use it to block execution.
+ */
+static int audit_wrap(void *arg, void **wh, const char *name, const char *fn)
+{
+	(void) arg;
+	(void) fn;
+
+	// this function will be called twice. maybe no need for any allocation at all..
+
+	if (*wh == NULL) {
+		// called before execution
+		*wh = malloc(1);
+		cligen_output(stdout, "[audit] calling \"%s\"", name ? name : "");
+	} else {
+		// called after execution, no free() needed ... but why
+		cligen_output(stdout, "[audit] done \"%s\"", name ? name : "");
+	}
+
+	return 0;
+}
+
 /* ===== MAIN PROGRAM ===== */
 
 int main(void)
@@ -705,6 +640,7 @@ int main(void)
 	parse_tree *tree = NULL;
 	pt_head *head = NULL;
 	cvec *globals = NULL;
+	static cli_session sess = {0};
 
 	cligen_output(stdout, "\n╔════════════════════════════════════════════════════════════╗\n");
 	cligen_output(stdout, "║                   Network Configuration CLI                ║\n");
@@ -759,14 +695,10 @@ int main(void)
 	/* Install the per-command pre-execution hook on every command in every
 	 * tree. Must run AFTER cligen_callbackv_str2fn() so each command already has
 	 * its real callback - we prepend ours to that chain. */
-	if (install_audit_hook(g_cli_handle) < 0) {
-		cligen_output(stderr, "Error: Failed to install audit hook\n");
-		goto error_out;
-	}
+	cligen_eval_wrap_fn_set(g_cli_handle, audit_wrap, NULL);
 
 	/* Authenticate, then activate the mode (parse tree) + prompt for the role.
 	 * 'sess' is static so it outlives main()'s stack frame for the loop's use. */
-	static cli_session sess;
 	if (do_login(&sess) < 0)
 		goto error_out;
 
@@ -800,7 +732,9 @@ error_out:
 
 out:
 	cvec_free(globals);
-	cligen_exit(g_cli_handle);
+	if (g_cli_handle) {
+		cligen_exit(g_cli_handle);
+	}
 
 	printf("exiting...\n");
 
