@@ -3,22 +3,15 @@ CFLAGS = -Wall -Wextra -Wno-unused-parameter -Wconversion -Wstrict-prototypes -W
 LDFLAGS = -lcligen
 
 # Default target
-# all: scli scli_emb
-all: scli_emb
+all: scli
 
-# scli: simple_cli_cligen.c
-# 	$(CC) $(CFLAGS) -o scli simple_cli_cligen.c $(LDFLAGS)
-
-scli_emb: simple_cli_cligen_embedded.c
-	$(CC) $(CFLAGS) -o scli_emb simple_cli_cligen_embedded.c $(LDFLAGS)
+scli: scli.c
+	$(CC) $(CFLAGS) -o scli scli.c $(LDFLAGS)
 
 clean:
-	rm -f scli scli_emb *.o
+	rm -f scli *.o
 
 run: scli
 	./scli
 
-run-embedded: scli_emb
-	./scli_emb
-
-.PHONY: all clean run run-embedded
+.PHONY: all clean run

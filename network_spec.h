@@ -37,7 +37,7 @@ static const char *embedded_cli_spec =
 	"    <size:uint16 range[5:100]>(\"history size\"), set_history_size();\n"
 	"}\n"
 	"# Configure interface settings\n"
-	"interface <ifname:string interface()>(\"Interface name\") {\n"
+	"interface(\"Change interface configuration\") <ifname:string interface()>(\"Interface name\") {\n"
 	"    ip <ipaddr:ipv4addr>(\"IP address\"), set_interface_ip();\n"
 	"    no ip(\"Remove IPv4 address\"), remove_interface_ip();\n"
 	"    ipv6 <ipaddr:ipv6addr>(\"IPv6 address\"), set_interface_ipv6();\n"
