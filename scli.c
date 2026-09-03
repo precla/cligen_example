@@ -623,10 +623,8 @@ static int audit_wrap(void *arg, void **wh, const char *name, const char *fn)
 	if (*wh == NULL) {
 		// called before execution
 		*wh = malloc(1);
-		cligen_output(stdout, "[audit] calling \"%s\"", name ? name : "");
 	} else {
 		// called after execution, no free() needed ... but why
-		cligen_output(stdout, "[audit] done \"%s\"", name ? name : "");
 	}
 
 	return 0;
